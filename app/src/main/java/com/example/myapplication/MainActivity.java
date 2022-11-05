@@ -1,13 +1,13 @@
 package com.example.myapplication;
 
-import static android.content.ContentValues.TAG;
-
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -21,31 +21,50 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
+    //TODO indicar a que conectarse
+    private final String bluetoothDevice = "Kami Beats Solo³";
+            //"ROBOTIS_210_D4";
+    private BluetoothDevice robotis = null;
+
     public static Boolean bluetoothActive = false;
     private ArrayList<BluetoothDevice> deviceList = new ArrayList<BluetoothDevice>();
 
+    //General
+    TextView statusLabel;
+
+
+    //Actions
     Button connectButton;
     Button disconnectButton;
+
     Button forwardButton;
     Button backwardButton;
     Button leftButton;
     Button rightButton;
 
-    TextView statusLabel;
+    Button stopButton;
 
+
+    //Speed
+    Button increaseSpeed;
+    Button decreaseSpeed;
+    TextView speedLabel;
+    private int speed;
+
+
+    //Bluetooth
     BluetoothAdapter bluetooth;
-
-    Socket btSocket;
-    InputStream inputStream;
-    OutputStream outputStream;
+    BluetoothSocket btSocket;
+    private InputStream inputStream;
+    private OutputStream outputStream;
 
 
     @Override
@@ -55,15 +74,38 @@ public class MainActivity extends AppCompatActivity {
 
         connectButton = (Button) findViewById(R.id.connectButton);
         disconnectButton = (Button) findViewById(R.id.disconnectButton);
+
         forwardButton = (Button) findViewById(R.id.forwardButton);
-        backwardButton= (Button) findViewById(R.id.backwardButton);
-        leftButton= (Button) findViewById(R.id.leftButton);
-        rightButton= (Button) findViewById(R.id.rightButton);
+        backwardButton = (Button) findViewById(R.id.backwardButton);
+        leftButton = (Button) findViewById(R.id.leftButton);
+        rightButton = (Button) findViewById(R.id.rightButton);
+
+        stopButton = (Button) findViewById(R.id.stopButton);
+
+        speedLabel = (TextView) findViewById(R.id.speedText);
+        increaseSpeed = (Button) findViewById(R.id.incSpeedButton);
+        decreaseSpeed = (Button) findViewById(R.id.decSpeedButton);
 
         statusLabel = (TextView) findViewById(R.id.statusLabel);
 
         //BLUETOOTH CONFIG
         bluetooth = BluetoothAdapter.getDefaultAdapter();
+
+        //Action listeners association
+        disconnectButton.setOnClickListener(v -> disconnect());
+        forwardButton.setOnClickListener(v -> forward());
+        backwardButton.setOnClickListener(v -> backward());
+        leftButton.setOnClickListener(v -> moveLeft());
+        rightButton.setOnClickListener(v -> moveRight());
+
+        stopButton.setOnClickListener(v -> stop());
+
+        increaseSpeed.setOnClickListener(v -> increaseSpeed());
+        decreaseSpeed.setOnClickListener(v -> decreaseSpeed());
+
+        //Initial button status
+        connectButton.setEnabled(true);
+        disconnectButton.setEnabled(false);
 
 
     }
@@ -123,8 +165,8 @@ public class MainActivity extends AppCompatActivity {
             Log.d("MyFirstApp", "Discovered " + remoteDeviceName);
             Log.d("MyFirstApp", "RSSI " + rssi + "dBm");
 
-            if (remoteDeviceName.equals("SUM_SCH3")) {
-                Log.d("onReceive", "Discovered SUM_SCH3:connecting");
+            if (remoteDeviceName != null && remoteDeviceName.equals(bluetoothDevice)) { //TODO comprobar que funciona
+                Log.d("MyFirstApp", "Discovered " + bluetoothDevice + ":connecting");
                 connect(remoteDevice);
             }
         }
@@ -146,24 +188,187 @@ public class MainActivity extends AppCompatActivity {
 
     protected void connect(BluetoothDevice device) {
         try {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return;
+            }
             btSocket = device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));
             btSocket.connect();
-            Log.d("connect", "Client connected");
+            Log.d("MyFirstApp", "Client connected");
             inputStream = btSocket.getInputStream();
             outputStream = btSocket.getOutputStream();
+
+            statusLabel.setText(String.format("Connected to %s successfully.", bluetoothDevice));
+            connectButton.setEnabled(false);
+            disconnectButton.setEnabled(true);
+
         }catch (Exception e) {
             Log.e("ERROR: connect", ">>", e);
         }
     }
 
+    protected void disconnect() {
+        statusLabel.setText("Disconnect pressed");
+        if (bluetooth != null && bluetooth.isEnabled()) {
+            if (btSocket != null && btSocket.isConnected()) {
+                try {
+                    btSocket.close();
+                    connectButton.setEnabled(true);
+                    disconnectButton.setEnabled(false);
+                    statusLabel.setText(String.format("Disconnected succesfully from %s", bluetoothDevice));
+                    Log.d("MyFirstApp", "Client disconnected");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    //Movement format
+    /*
+    Example= "w\n" + speed + "\n"
+    w = Forward
+    s = Backwards
+    q = MoveLeft
+    a = Left
+    e= MoveRight
+    d = Right
+    Speed = [1-9]
+    Stop = 0*/
+
+
     public void forward() {
         try {
-            String tmpStr = "WHEELS+70+110";
+            speed = Integer.parseInt(speedLabel.getText().toString());
+            String tmpStr = "w\n" + speed + "\n";
             byte bytes[] = tmpStr.getBytes();
             if (outputStream != null) outputStream.write(bytes);
             if (outputStream != null) outputStream.flush();
+            Log.d("MyFirstApp", "Forward sent");
+            statusLabel.setText("Moving forward at speed " + speed);
         } catch (Exception e) {
-            Log.e("forward", "ERROR:" + e);
+            Log.e("MyFirstApp", "FORWARD ERROR:" + e);
         }
     }
+
+    public void backward() {
+        try {
+            speed = Integer.parseInt(speedLabel.getText().toString());
+            String tmpStr = "s\n" + speed + "\n";
+            byte bytes[] = tmpStr.getBytes();
+            if (outputStream != null) outputStream.write(bytes);
+            if (outputStream != null) outputStream.flush();
+            Log.d("MyFirstApp", "Backward sent");
+            statusLabel.setText("Moving backwards at speed " + speed);
+        } catch (Exception e) {
+            Log.e("MyFirstApp", "BACKWARD ERROR:" + e);
+        }
+    }
+
+    public void moveLeft() {
+        try {
+            speed = Integer.parseInt(speedLabel.getText().toString());
+            String tmpStr = "q\n" + speed + "\n";
+            byte bytes[] = tmpStr.getBytes();
+            if (outputStream != null) outputStream.write(bytes);
+            if (outputStream != null) outputStream.flush();
+            Log.d("MyFirstApp", "Move left sent");
+            statusLabel.setText("Moving left at speed " + speed);
+        } catch (Exception e) {
+            Log.e("MyFirstApp", "MOVE LEFT ERROR:" + e);
+        }
+    }
+
+    public void left() {
+        try {
+            speed = Integer.parseInt(speedLabel.getText().toString());
+            String tmpStr = "a\n" + speed + "\n";
+            byte bytes[] = tmpStr.getBytes();
+            if (outputStream != null) outputStream.write(bytes);
+            if (outputStream != null) outputStream.flush();
+            Log.d("MyFirstApp", "Left sent");
+            statusLabel.setText("Left at speed " + speed);
+        } catch (Exception e) {
+            Log.e("MyFirstApp", "LEFT ERROR:" + e);
+        }
+    }
+
+    public void moveRight() {
+        try {
+            speed = Integer.parseInt(speedLabel.getText().toString());
+            String tmpStr = "e\n" + speed + "\n";
+            byte bytes[] = tmpStr.getBytes();
+            if (outputStream != null) outputStream.write(bytes);
+            if (outputStream != null) outputStream.flush();
+            Log.d("MyFirstApp", "Move right sent");
+            statusLabel.setText("Moving right at speed " + speed);
+        } catch (Exception e) {
+            Log.e("MyFirstApp", "MOVE RIGHT ERROR:" + e);
+        }
+    }
+
+    public void right() {
+        try {
+            speed = Integer.parseInt(speedLabel.getText().toString());
+            String tmpStr = "d\n" + speed + "\n";
+            byte bytes[] = tmpStr.getBytes();
+            if (outputStream != null) outputStream.write(bytes);
+            if (outputStream != null) outputStream.flush();
+            Log.d("MyFirstApp", "Right sent");
+            statusLabel.setText("Right at speed " + speed);
+        } catch (Exception e) {
+            Log.e("MyFirstApp", "RIGHT ERROR:" + e);
+        }
+    }
+
+    public void stop() {
+        try {
+            String tmpStr = "w\n0\n";
+            byte[] bytes = tmpStr.getBytes();
+            if (outputStream != null) outputStream.write(bytes);
+            if (outputStream != null) outputStream.flush();
+            Log.d("MyFirstApp", "Stop sent");
+            statusLabel.setText("Stopping robot");
+
+        } catch (Exception e) {
+            Log.e("MyFirstApp", "STOP ERROR:" + e);
+        }
+    }
+
+    public void increaseSpeed(){
+        String currentSpeed = speedLabel.getText().toString();
+        speed = Integer.parseInt(currentSpeed);
+
+        if (speed < 9) speed++;
+        else {
+            Log.d("MyFirstApp", "Maximum speed reached");
+            Toast.makeText(getApplicationContext(), "Maximum speed reached", Toast.LENGTH_SHORT).show();
+        }
+
+        speedLabel.setText(String.valueOf(speed));
+
+    }
+
+    public void decreaseSpeed(){
+        String currentSpeed = speedLabel.getText().toString();
+        speed = Integer.parseInt(currentSpeed);
+
+        if (speed > 1) speed--;
+        else {
+            Log.d("MyFirstApp", "Minimum speed reached");
+            Toast.makeText(getApplicationContext(), "Minimun speed reached", Toast.LENGTH_SHORT).show();
+        }
+
+        speedLabel.setText(String.valueOf(speed));
+
+    }
+
+
+
 }
