@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>TELEROBOT VERSION 2.0 5/12/2018</title>
+        <script type="text/JavaScript"> function timedRefresh() {
+        objectToBeRefreshed = document.camerainput;
+        objectToBeRefreshed.src = objectToBeRefreshed.src + "?" + Math.random();
+        //Call the timedRefresh() function again after 1000 milliseconds
+        setTimeout("timedRefresh()",1000);
+        }
+</script>
+    </head>
+    <body>
+        <body onload="JavaScript:timedRefresh();">
+            <img src=’camera.jpg’ height=’50%’ id=’camerainput’>
+            <a href="/forward">Forward</a><br>
+            <a href="/backward">Backward</a><br>
+            <a href="/left">Left</a><br>
+            <a href="/right">Right</a><br>
+            <a href="/stop">Stop</a><br>
+            <form name="input" action="message" method="get">
+                SHOW MESSAGE: <input type="text" name="text">
+                <input type="submit" value="Submit">
+            </form>
+        </body>
+    </body>
+</html>

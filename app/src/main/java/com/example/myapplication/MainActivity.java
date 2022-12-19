@@ -13,24 +13,35 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.hardware.Camera;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.UUID;
 
+
 public class MainActivity extends AppCompatActivity {
 
     //TODO indicar a que conectarse
-    private final String bluetoothDevice = "Kami Beats Solo³";
+    private final String bluetoothDevice = "ROBOTIS_210_D4";
             //"ROBOTIS_210_D4";
     private BluetoothDevice robotis = null;
 
@@ -65,6 +76,16 @@ public class MainActivity extends AppCompatActivity {
     BluetoothSocket btSocket;
     private InputStream inputStream;
     private OutputStream outputStream;
+
+    //Camera
+    FrameLayout cameraPreviewFrameLayout;
+    Camera mCamera;
+    CameraPreview mCameraPreview;
+
+    //FILE
+    private static File mediaStorageDir;
+    private static File mediaFile;
+
 
 
     @Override
@@ -107,7 +128,38 @@ public class MainActivity extends AppCompatActivity {
         connectButton.setEnabled(true);
         disconnectButton.setEnabled(false);
 
+        //Camera
+        checkCAMPermissions(); //TODO solo funciona al abrir y cerrar
 
+        cameraPreviewFrameLayout = (FrameLayout) findViewById(R.id.cameraView);
+
+        mCamera = getCameraInstance();
+        mCameraPreview = new CameraPreview(this, mCamera);
+        cameraPreviewFrameLayout = (FrameLayout) findViewById(R.id.cameraView);
+        cameraPreviewFrameLayout.addView(mCameraPreview);
+
+        Handler handlerNetworkExecutorResult = new Handler() {
+            @Override
+            public void handleMessage(Message msg) {
+                Log.d("handlerNetworkExecutorResult", (String) msg.obj);
+                if (msg != null) {
+                    if (msg.obj.equals("FORWARD")) {
+                        forward();
+                    } else if (msg.obj.equals("BACKWARD")) {
+                        backward();
+                    } else if (msg.obj.equals("LEFT")) {
+                        left();
+                    } else if (msg.obj.equals("RIGHT")) {
+                        right();
+                    } else if (msg.obj.equals("CAMERA")) {
+                        captureCamera();
+                    }
+                }
+            }
+        };
+
+        NetworkExecutor networkExecutor = new NetworkExecutor(this);
+        networkExecutor.start();
     }
 
     public void onClickConnect(View view) {
@@ -135,6 +187,16 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 bluetoothActive = false;
                 Toast.makeText(getApplicationContext(), "User Did not enable Bluetooth", Toast.LENGTH_SHORT).show();
+            }
+        if (requestCode ==2) //Camera permission request code
+            if (resultCode == RESULT_OK){
+                Toast.makeText(getApplicationContext(), "User Enabled Camera", Toast.LENGTH_SHORT);
+                mCamera = getCameraInstance();
+                mCameraPreview = new CameraPreview(this, mCamera);
+                cameraPreviewFrameLayout = (FrameLayout) findViewById(R.id.cameraView);
+                cameraPreviewFrameLayout.addView(mCameraPreview);
+            }else {
+                Toast.makeText(getApplicationContext(), "User Did not enable Camera", Toast.LENGTH_SHORT).show();
             }
     }
 
@@ -196,7 +258,7 @@ public class MainActivity extends AppCompatActivity {
                 //                                          int[] grantResults)
                 // to handle the case where the user grants the permission. See the documentation
                 // for ActivityCompat#requestPermissions for more details.
-                return;
+                //return;
             }
             btSocket = device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));
             btSocket.connect();
@@ -369,6 +431,62 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    private android.hardware.Camera getCameraInstance() {
+        android.hardware.Camera camera = null;
+        try {
+            camera = android.hardware.Camera.open(0);
+        } catch (Exception e) {
+            // cannot get camera or does not exist
+            Log.d("getCameraInstance", "ERROR" + e);
+        } return camera;
+    }
 
+    public void checkCAMPermissions() {
+        if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED){
+            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.CAMERA}, 2);
+
+        }
+    }
+
+    //TODO Segunda parte
+    public void captureCamera(){ if (mCamera!=null) { mCamera.takePicture(null, null, mPicture); } }
+
+    android.hardware.Camera.PictureCallback mPicture = new android.hardware.Camera.PictureCallback() {
+        @Override public void onPictureTaken(byte[] data, android.hardware.Camera camera) {
+            byte[] resized = resizeImage(data);
+            File pictureFile = getOutputMediaFile();
+            if (pictureFile == null) { return; }
+            try {
+                FileOutputStream fos = new FileOutputStream(pictureFile);
+                fos.write(resized); fos.close();
+            } catch (Exception e) {
+                Log.e("onPictureTaken", "ERROR:" + e);
+            }
+        }
+    };
+
+    byte[] resizeImage(byte[] input) {
+        Bitmap originalBitmap = BitmapFactory.decodeByteArray(input, 0, input.length);
+        Bitmap resizedBitmap = Bitmap.createScaledBitmap(originalBitmap, 80, 107, true);
+        ByteArrayOutputStream blob = new ByteArrayOutputStream();
+        resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, blob);
+        return blob.toByteArray();
+    }
+
+     static File getOutputMediaFile() { //TODO
+        if (mediaStorageDir == null) {
+            mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "My Application");
+            if (!mediaStorageDir.exists()) {
+                if (!mediaStorageDir.mkdirs()) {
+                    Log.d("My Application", "failed to create directory");
+                    return null;
+                }
+            }
+        }
+        if (mediaFile == null) {
+            mediaFile = new File(mediaStorageDir.getPath() + File.separator + "IMG.jpg");
+        }
+        return mediaFile;
+    }
 
 }
