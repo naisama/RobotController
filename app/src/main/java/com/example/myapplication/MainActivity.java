@@ -82,6 +82,8 @@ public class MainActivity extends AppCompatActivity {
     Camera mCamera;
     CameraPreview mCameraPreview;
 
+    Button photoButton;
+
     //FILE
     private static File mediaStorageDir;
     private static File mediaFile;
@@ -137,11 +139,14 @@ public class MainActivity extends AppCompatActivity {
         mCameraPreview = new CameraPreview(this, mCamera);
         cameraPreviewFrameLayout = (FrameLayout) findViewById(R.id.cameraView);
         cameraPreviewFrameLayout.addView(mCameraPreview);
+        photoButton = (Button) findViewById(R.id.photoButton);
+        photoButton.setOnClickListener(v -> captureCamera());
+
 
         Handler handlerNetworkExecutorResult = new Handler() {
             @Override
             public void handleMessage(Message msg) {
-                Log.d("handlerNetworkExecutorResult", (String) msg.obj);
+                Log.d("handlerNetworkExecRes", (String) msg.obj);
                 if (msg != null) {
                     if (msg.obj.equals("FORWARD")) {
                         forward();
@@ -431,7 +436,7 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private android.hardware.Camera getCameraInstance() {
+    private android.hardware.Camera getCameraInstance() { //TODO añadir opcion camara 1 o 0
         android.hardware.Camera camera = null;
         try {
             camera = android.hardware.Camera.open(0);
@@ -449,7 +454,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //TODO Segunda parte
-    public void captureCamera(){ if (mCamera!=null) { mCamera.takePicture(null, null, mPicture); } }
+    public void captureCamera(){
+        if (mCamera!=null) {
+            mCamera.takePicture(null, null, mPicture); }
+    }
 
     android.hardware.Camera.PictureCallback mPicture = new android.hardware.Camera.PictureCallback() {
         @Override public void onPictureTaken(byte[] data, android.hardware.Camera camera) {
@@ -475,7 +483,10 @@ public class MainActivity extends AppCompatActivity {
 
      static File getOutputMediaFile() { //TODO
         if (mediaStorageDir == null) {
-            mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "My Application");
+            mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "MyApplication");
+            String s = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).toString();
+            System.out.println("Hola");
+
             if (!mediaStorageDir.exists()) {
                 if (!mediaStorageDir.mkdirs()) {
                     Log.d("My Application", "failed to create directory");

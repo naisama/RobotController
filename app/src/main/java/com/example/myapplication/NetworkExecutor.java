@@ -22,7 +22,7 @@ import java.util.StringTokenizer;
 
 public class NetworkExecutor extends Thread {
 
-    private int HTTP_SERVER_PORT = 8090;//TODO
+    private int HTTP_SERVER_PORT = 9999;//TODO
     final public int CODE_OK = 200;
     final public int CODE_BADREQUEST = 400;
     final public int CODE_FORBIDDEN = 403;
@@ -41,16 +41,22 @@ public class NetworkExecutor extends Thread {
     public void run() {
         Socket scliente = null;
         ServerSocket unSocket = null;
+        try {
+            unSocket = new ServerSocket(HTTP_SERVER_PORT); //Creamos el puerto
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         while (true) {
             try {
-                unSocket = new ServerSocket(HTTP_SERVER_PORT); //Creamos el puerto scliente = unSocket.accept(); //Aceptando conexiones del navegador Web
+                scliente = unSocket.accept(); // Aceptando conexiones del navegador Web
+
                 System.setProperty("line.separator", "\r\n"); //Creamos los objetos para leer y escribir en el socket
                 BufferedReader in = new BufferedReader(new InputStreamReader(scliente.getInputStream()));
                 PrintStream out = new PrintStream(new BufferedOutputStream(scliente.getOutputStream()));
                 //Leemos el comando que ha sido enviado por el servidor web
                 // Ejemplo de comando: GET /index.html HTTP\1.0
                 String cadena = in.readLine();
-
                 StringTokenizer st = new StringTokenizer(cadena);
                 String commandString = st.nextToken().toUpperCase();
                 if (commandString.equals("GET")) {
@@ -94,8 +100,6 @@ public class NetworkExecutor extends Thread {
                             out.close();
                         }
 
-
-                        //TODO socket.close()
                     }
                 }
             } catch (IOException e) {
